@@ -19,6 +19,9 @@
   var CAPTURE = params.has('capture');
   var REDUCE = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var STILL = CAPTURE || REDUCE;
+  // スマホ・タブレット（指で操作する端末か、幅900px以下）は、重い演出を減らす
+  var MOBILE = window.matchMedia('(max-width: 900px), (hover: none) and (pointer: coarse)').matches;
+  if (MOBILE) root.classList.add('is-mobile');
   var hasGSAP = typeof gsap !== 'undefined' && typeof ScrollTrigger !== 'undefined';
   function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
   function ease(t) { return 1 - Math.pow(1 - t, 3); }
@@ -97,75 +100,76 @@
   var sticky = $('.sticky-cta');
   var contact = $('#contact');
   var lastY = window.scrollY;
+  var lastLit = -1, lastHp = -1;
+  var isWide = function () { return window.innerWidth > 900; };
+  var stickTops = [];
+  function measureSticky() { stickTops = cards.map(function (c) { return parseFloat(getComputedStyle(c).top) || 0; }); }
+  measureSticky();
 
-  function onScroll() {
+  /* スクロール時の処理は「1コマに1回」だけ、先に位置を全部読んでから、まとめて書き換える
+     （読む→書く→読む…を繰り返すと、スマホでは毎回ページ全体の計算がやり直しになり、カクつく） */
+  function update() {
     var y = window.scrollY || window.pageYOffset;
     var vh = window.innerHeight;
 
+    // ---- 読む ----
+    var heroBottom = hero.getBoundingClientRect().bottom;
+    var contactTop = contact.getBoundingClientRect().top;
+    var worryTops = STILL ? [] : worries.map(function (w) { return w.getBoundingClientRect().top; });
+    var sr = (!STILL && statementChars.length) ? statement.getBoundingClientRect() : null;
+    var cardTops = (!STILL && isWide()) ? cards.map(function (c) { return c.getBoundingClientRect().top; }) : null;
+    var tr = (!STILL && timeline) ? timeline.getBoundingClientRect() : null;
+    var tlTops = tr ? tlItems.map(function (li) { return li.getBoundingClientRect().top; }) : [];
+
+    // ---- 書く ----
     // ヘッダー：トップを過ぎたら地をつけ、下へ進む間は隠す
     header.classList.toggle('is-solid', y > 40);
     if (y > lastY + 4 && y > vh * 0.9) header.classList.add('is-hidden');
     else if (y < lastY - 4 || y < vh * 0.9) header.classList.remove('is-hidden');
     lastY = y;
-
     // スマホの固定ボタン：トップを過ぎてから、最後のお問い合わせの手前まで
-    if (sticky) {
-      var past = hero.getBoundingClientRect().bottom < vh * 0.3;
-      var atEnd = contact.getBoundingClientRect().top < vh * 0.9;
-      sticky.classList.toggle('is-shown', past && !atEnd);
-    }
+    if (sticky) sticky.classList.toggle('is-shown', heroBottom < vh * 0.3 && contactTop >= vh * 0.9);
 
     if (STILL) return;
 
-    // トップの背景の形：スクロールで回り、広がり、流れていく
-    var hp = clamp(y / (vh * 1.1), 0, 1);
-    heroBg.style.setProperty('--hp', hp.toFixed(4));
-
+    // トップの背景の形：スクロールで回り、広がる（PCだけ。トップが見えている間だけ）
+    if (isWide() && y < vh * 1.3) {
+      var hp = Math.round(clamp(y / (vh * 1.1), 0, 1) * 200) / 200;
+      if (hp !== lastHp) { heroBg.style.setProperty('--hp', hp); lastHp = hp; }
+    }
     // 悩み：画面の少し上まで来た行から順に灯る
-    worries.forEach(function (w) {
-      w.classList.toggle('is-lit', w.getBoundingClientRect().top < vh * 0.66);
-    });
-
-    // コンセプト：スクロールに合わせて、文字が1文字ずつ灯る
-    if (statementChars.length) {
-      var sr = statement.getBoundingClientRect();
+    worries.forEach(function (w, i) { w.classList.toggle('is-lit', worryTops[i] < vh * 0.66); });
+    // コンセプト：文字が1文字ずつ灯る（灯る数が変わったときだけ書き換える）
+    if (sr) {
       var p = clamp((vh * 0.8 - sr.top) / (vh * 0.5 + sr.height * 0.6), 0, 1);
       var n = Math.round(p * statementChars.length);
-      for (var i = 0; i < statementChars.length; i++) {
-        statementChars[i].style.opacity = i < n ? 1 : 0.14;
+      if (n !== lastLit) {
+        for (var i = 0; i < statementChars.length; i++) statementChars[i].classList.toggle('is-on', i < n);
+        lastLit = n;
       }
     }
-
     // サポートのカード：次のカードが重なってくるほど、奥へ沈む（PCのみ）
-    if (window.innerWidth > 900) {
+    if (cardTops) {
       for (var c = 0; c < cards.length - 1; c++) {
-        var next = cards[c + 1];
-        var stickTop = parseFloat(getComputedStyle(next).top) || 0;
-        var dist = next.getBoundingClientRect().top - stickTop;
-        cards[c].style.setProperty('--cover', clamp(1 - dist / (vh * 0.75), 0, 1).toFixed(3));
+        var dist = cardTops[c + 1] - stickTops[c + 1];
+        cards[c].style.setProperty('--cover', clamp(1 - dist / (vh * 0.75), 0, 1).toFixed(2));
       }
     }
-
-    // 線画：画面に入るにつれて線が描かれる
-    draws.forEach(function (svg) {
-      var b = svg.getBoundingClientRect();
-      var dp = clamp((vh * 0.95 - b.top) / (vh * 0.55), 0, 1);
-      svg.style.setProperty('--draw', (1 - ease(dp)).toFixed(3));
-    });
-
     // プロセス：光が縦線を流れ、通過した項目が灯る
-    if (timeline) {
-      var tr = timeline.getBoundingClientRect();
+    if (tr) {
       var line = vh * 0.58;
-      var tp = clamp((line - tr.top) / tr.height, 0, 1);
-      timeline.style.setProperty('--tp', tp.toFixed(4));
-      tlItems.forEach(function (li) {
-        li.classList.toggle('is-lit', li.getBoundingClientRect().top + 20 < line);
-      });
+      timeline.style.setProperty('--tp', clamp((line - tr.top) / tr.height, 0, 1).toFixed(3));
+      tlItems.forEach(function (li, k) { li.classList.toggle('is-lit', tlTops[k] + 20 < line); });
     }
   }
+  var ticking = false;
+  function onScroll() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function () { ticking = false; update(); });
+  }
   window.addEventListener('scroll', onScroll, { passive: true });
-  window.addEventListener('resize', onScroll);
+  window.addEventListener('resize', function () { measureSticky(); onScroll(); });
 
   if (STILL) {
     worries.forEach(function (w) { w.classList.add('is-lit'); });
@@ -285,7 +289,7 @@
     function loop(t) { if (!running) return; draw(t, true); requestAnimationFrame(loop); }
     resize();
     window.addEventListener('resize', function () { resize(); if (!running) draw(0, false); });
-    if (STILL) { draw(0, false); return; }
+    if (STILL || MOBILE) { draw(0, false); return; }   // スマホは止まった光の粒（軽さ優先）
     window.addEventListener('pointermove', function (e) {
       tx = e.clientX / window.innerWidth - 0.5; ty = e.clientY / window.innerHeight - 0.5;
     }, { passive: true });
@@ -308,52 +312,61 @@
     var h1 = splitChars($('.hero__title'));
     gsap.timeline({ delay: 0.15 })
       .fromTo('.hero__kicker span', { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 1, ease: 'power3.out', stagger: 0.08 }, 0)
-      .fromTo(w1, { yPercent: 105, opacity: 0, rotate: 6 }, { yPercent: 0, opacity: 1, rotate: 0, duration: 1.4, ease: 'expo.out', stagger: 0.05 }, 0.1)
-      .fromTo(w2, { yPercent: 105, opacity: 0, rotate: 6 }, { yPercent: 0, opacity: 1, rotate: 0, duration: 1.4, ease: 'expo.out', stagger: 0.05 }, 0.32)
-      .fromTo(h1, { yPercent: 80, opacity: 0 }, { yPercent: 0, opacity: 1, duration: 1, ease: 'expo.out', stagger: 0.022 }, 0.75)
+      .fromTo(w1, { yPercent: 105, opacity: 0, rotate: 6 }, { yPercent: 0, opacity: 1, rotate: 0, duration: 1.4, ease: 'expo.out', stagger: 0.05, clearProps: 'transform' }, 0.1)
+      .fromTo(w2, { yPercent: 105, opacity: 0, rotate: 6 }, { yPercent: 0, opacity: 1, rotate: 0, duration: 1.4, ease: 'expo.out', stagger: 0.05, clearProps: 'transform' }, 0.32)
+      .fromTo(h1, { yPercent: 80, opacity: 0 }, { yPercent: 0, opacity: 1, duration: 1, ease: 'expo.out', stagger: 0.022, clearProps: 'transform' }, 0.75)
       .fromTo('.hero__lead, .hero__cta', { y: 22, opacity: 0 }, { y: 0, opacity: 1, duration: 1.1, ease: 'power3.out', stagger: 0.1, clearProps: 'transform' }, 1.25)
       .fromTo('.hero__vertical', { opacity: 0 }, { opacity: 1, duration: 1.4, ease: 'expo.out' }, 0.9);
 
-    // スクロールすると英字が左右に離れていく
+    // スクロールすると英字が左右に離れていく（PCのみ）
     var heroST = { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true };
-    gsap.fromTo('.hero__word--1', { x: 0 }, { x: -160, ease: 'none', scrollTrigger: heroST });
-    gsap.fromTo('.hero__word--2', { x: 0 }, { x: 140, ease: 'none', scrollTrigger: heroST });
-    gsap.fromTo('.hero__vertical', { yPercent: 0 }, { yPercent: -30, ease: 'none', scrollTrigger: heroST });
+    if (!MOBILE) {
+      gsap.fromTo('.hero__word--1', { x: 0 }, { x: -160, ease: 'none', scrollTrigger: heroST });
+      gsap.fromTo('.hero__word--2', { x: 0 }, { x: 140, ease: 'none', scrollTrigger: heroST });
+      gsap.fromTo('.hero__vertical', { yPercent: 0 }, { yPercent: -30, ease: 'none', scrollTrigger: heroST });
+    }
 
-    // 見出し：1文字ずつ立ち上がる
+    // 見出し：PCは1文字ずつ、スマホは1行ずつ立ち上がる（スマホは文字ごとの立体の動きが重いため）
     $$('main .kin').forEach(function (el) {
       if (el.closest('.hero')) return;
+      if (MOBILE) {
+        wrapLines(el);
+        gsap.fromTo(el.querySelectorAll('.ln'), { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 1, ease: 'power3.out', stagger: 0.12, clearProps: 'transform',
+          scrollTrigger: { trigger: el, start: 'top 88%', once: true } });
+        return;
+      }
       var chars = splitChars(el);
-      gsap.fromTo(chars, { yPercent: 70, opacity: 0, rotateX: -60 }, {
-        yPercent: 0, opacity: 1, rotateX: 0, duration: 1.1, ease: 'expo.out', stagger: 0.022,
+      // 立体（rotateX）にすると1文字ずつが別の層になり、ページ全体が重くなるので平面の動きにする。終わったら動きの指定を消す
+      gsap.fromTo(chars, { yPercent: 70, opacity: 0 }, {
+        yPercent: 0, opacity: 1, duration: 1.1, ease: 'expo.out', stagger: 0.022, clearProps: 'transform',
         scrollTrigger: { trigger: el, start: 'top 86%', once: true }
       });
     });
 
-    // 巨大な英字：横から滑り込む
-    $$('.mega').forEach(function (el) {
+    // 巨大な英字：横から滑り込む（PCのみ）
+    if (!MOBILE) $$('.mega').forEach(function (el) {
       gsap.fromTo(el, { xPercent: 14 }, { xPercent: -4, ease: 'none',
         scrollTrigger: { trigger: el, start: 'top bottom', end: 'bottom top', scrub: true } });
     });
 
-    // 英字ラベル・導入文
+    // 英字ラベル：ふわっと現れる（字間の動きは文字の組み直しが毎回起きて重いので使わない）
     $$('.eyebrow').forEach(function (el) {
       if (el.closest('.hero')) return;
-      gsap.fromTo(el, { opacity: 0, letterSpacing: '.5em' }, { opacity: 1, letterSpacing: '.22em', duration: 1.4, ease: 'expo.out',
+      gsap.fromTo(el, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 1.2, ease: 'power3.out', clearProps: 'transform',
         scrollTrigger: { trigger: el, start: 'top 90%', once: true } });
     });
 
     // トップの絵：アーチの中から、ゆっくりせり上がる
-    gsap.fromTo('.hero__visual', { clipPath: 'inset(100% 0% 0% 0%)' }, { clipPath: 'inset(0% 0% 0% 0%)', duration: 1.8, ease: 'expo.out', delay: 0.35 });
-    gsap.fromTo('.hero__visual img', { scale: 1.25 }, { scale: 1, duration: 2.4, ease: 'expo.out', delay: 0.35 });
-    gsap.fromTo('.hero__visual', { yPercent: 0 }, { yPercent: 12, ease: 'none', scrollTrigger: heroST });
+    gsap.fromTo('.hero__visual', { clipPath: 'inset(100% 0% 0% 0%)' }, { clipPath: 'inset(0% 0% 0% 0%)', duration: 1.8, ease: 'expo.out', delay: 0.35, clearProps: 'clipPath' });
+    gsap.fromTo('.hero__visual img', { scale: 1.25 }, { scale: 1, duration: 2.4, ease: 'expo.out', delay: 0.35, clearProps: 'transform' });
+    // （トップの絵のスクロール連動は、常に重ね描きが発生して重くなるため外した）
 
     // 絵：幕が開くように現れ、スクロールでゆっくり動く
     $$('.scard__art, .photo').forEach(function (el) {
       gsap.fromTo(el, { clipPath: 'inset(16% 10% 16% 10% round 22px)' }, { clipPath: 'inset(0% 0% 0% 0% round 22px)', duration: 1.6, ease: 'expo.out',
         clearProps: 'clipPath', scrollTrigger: { trigger: el, start: 'top 88%', once: true } });
     });
-    $$('.scard__photo img, .photo:not(.photo--soft) img').forEach(function (img) {
+    if (!MOBILE) $$('.scard__photo img, .photo:not(.photo--soft) img').forEach(function (img) {
       gsap.fromTo(img, { scale: 1.18 }, { scale: 1, ease: 'none',
         scrollTrigger: { trigger: img, start: 'top bottom', end: 'bottom top', scrub: true } });
     });

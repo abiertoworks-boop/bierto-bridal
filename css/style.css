@@ -119,7 +119,7 @@ p.mega{white-space:nowrap;text-wrap:nowrap}
 .mega--dark{color:rgba(255,255,255,.06)}
 
 /* 見出しを1文字ずつ立ち上げる（行の途中では折り返さない） */
-.kin .ch{display:inline-block;white-space:pre;will-change:transform}
+.kin .ch{display:inline-block;white-space:pre}
 .ln{white-space:nowrap}
 @media (max-width:900px){
   .h2{font-size:clamp(21px,6.3vw,27px)}
@@ -267,14 +267,14 @@ p.mega{white-space:nowrap;text-wrap:nowrap}
 
 @media (max-width:900px){
   /* スマホ：上に指輪の場所をとり、その下に文章 */
-  .hero{align-items:flex-start;padding-top:calc(var(--header-h) + min(62vw,360px));padding-bottom:64px}
+  .hero{align-items:flex-start;padding-top:calc(var(--header-h) + min(76vw,450px));padding-bottom:64px}
   .hero__mega{font-size:clamp(48px,15vw,110px)}
   .hero__word--2{margin-left:6vw}
   .hero__vertical{display:none}
   .hero__visual{left:50%;right:auto;translate:-50% 0;top:calc(var(--header-h) + 6px);width:min(88vw,520px);aspect-ratio:1.55;border-radius:200px 200px 22px 22px}
   .hero__scroll{display:none}
   .shape--a{width:120vw;right:-46vw;top:-20vw}
-  .shape--dot{left:84vw;top:calc(var(--header-h) + min(62vw,360px) + 150px)}
+  .shape--dot{left:84vw;top:calc(var(--header-h) + min(76vw,450px) + 150px)}
   .shape--c{left:10vw;top:62svh;width:60vw}
 }
 
@@ -714,4 +714,42 @@ p.mega{white-space:nowrap;text-wrap:nowrap}
 }
 @media (max-width:900px){
   .photo.method__img{margin:26px auto 36px}
+}
+
+/* コンセプトの文字：スクロールで順に灯る（main.js が .is-on を付ける） */
+.js .statement .ch{opacity:.14}
+.js .statement .ch.is-on{opacity:1}
+
+/* =========================================================
+   スマホ・タブレット（.is-mobile）：重い描画を減らして、なめらかに
+   ========================================================= */
+.is-mobile .shape--a{animation:shape-in 1.6s var(--ease-out) backwards;transform:none}
+.is-mobile .shape--b,.is-mobile .shape--c,.is-mobile .shape--dot{transform:none}
+.is-mobile .shape--c{animation:none}
+.is-mobile .site-header.is-solid{background:rgba(251,247,242,.97);-webkit-backdrop-filter:none;backdrop-filter:none}
+.is-mobile .orbit__list li span{box-shadow:0 8px 18px -10px rgba(150,90,105,.45),inset 0 0 0 1px rgba(255,255,255,.9)}
+.is-mobile .marquee__track{animation-duration:60s}
+.is-mobile .scard__inner,.is-mobile .cc,.is-mobile .fstep{box-shadow:0 16px 36px -24px rgba(150,90,105,.4)}
+
+/* 絵が切れないように（2026-11-28） */
+.hero__visual{aspect-ratio:1.1;width:min(36vw,560px)}
+.hero__visual img{object-position:85% 50%}
+@media (min-width:901px){ .hero__vertical{right:calc(max(3vw,32px) + min(36vw,560px) + 22px)} }
+@media (max-width:900px){
+  .hero__visual{width:min(88vw,520px);aspect-ratio:1.25;border-radius:140px 140px 20px 20px}
+  .hero__visual img{object-position:50% 50%}
+}
+/* サポートの絵は、絵そのものの比率で全体を見せる */
+.scard__photo{aspect-ratio:auto;background:#fff}
+.scard__photo img{height:auto;object-fit:contain}
+@media (max-width:900px){ .scard__photo{aspect-ratio:auto} }
+
+/* 悩みの文：意味のまとまり（.ph）の途中では改行しない */
+.worry p{word-break:keep-all}
+.worry .ph{display:inline-block;white-space:nowrap}
+@media (max-width:900px){ .worry p{font-size:clamp(16px,4.6vw,19px)} }
+.hero__visual{box-shadow:0 24px 48px -30px rgba(150,90,105,.45)}
+@media (min-width:901px){
+  .hero__visual{width:min(33vw,520px);aspect-ratio:1.05}
+  .hero__vertical{right:calc(max(3vw,32px) + min(33vw,520px) + 22px)}
 }
